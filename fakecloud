@@ -119,20 +119,37 @@ get '/user-data' => sub {
   # cloud-init merges multiple attachments of the same type. documented at
   # http://cloudinit.readthedocs.io/en/latest/topics/merging.html
   foreach my $udfile (sort keys %filetypes) {
-    # all hosts get the files in the $udpath/all directory
-    if (-e "$udpath/all/$udfile") {
-      $top->attach(Path => "$udpath/all/$udfile" , Type => $filetypes{$udfile}, Filename => "$udfile-all");
+
+    # all hosts get the files in the $udpath/all directory (unless that
+    # host has an exclude-all or exclude-all-$udfile file to prevent it)
+    if ( (-e "$udpath/all/$udfile") && 
+         ( ! (-e "$udpath/$host/exclude-all" || 
+              -e "$udpath/$host/exclude-all-$udfile"
+             )
+         )
+       ) {
+
+      $top->attach(Path => "$udpath/all/$udfile" , 
+                   Type => $filetypes{$udfile}, 
+                   Filename => "$udfile-all");
+
     };
 
     # then they get $udpath/$host/$udfile if it exists, otherwise they
     # get $udpath/default/$udfile (if that exists).
     my $hostudfile='';
-    $hostudfile="$udpath/default/$udfile" if (-e "$udpath/default/$udfile");
-    $hostudfile="$udpath/$host/$udfile" if (-e "$udpath/$host/$udfile");
+    my $hostudpath='';
+    $hostudpath="$udpath/default" if (-e "$udpath/default/$udfile");
+    $hostudpath="$udpath/$host"   if (-e "$udpath/$host/$udfile");
+
+    $hostudfile = "$udpath/$hostudpath/$udfile" if ($hostudpath ne '');
 
     if (-e $hostudfile) {
-      $top->attach(Path => $hostudfile, Type => $filetypes{$udfile}, Filename => "$udfile-$host");
+      $top->attach(Path => $hostudfile, 
+                   Type => $filetypes{$udfile}, 
+                   Filename => "$udfile-$hostudpath");
     };
+
   };
 
   $c->render(text => $top->as_string, format => 'txt', gzip => 1);
