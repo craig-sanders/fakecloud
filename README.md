@@ -6,11 +6,12 @@
 to run pre-built cloud OS images on plain old libvirt, without having to
 install openstack or similar.
 
-It serves the data that cloud-init expects to fetch from
-http://169.254.169.254/
+It serves the data that cloud-init expects to fetch from a meta-data
+server at http://169.254.169.254/
 
-Run it on your VM host, and add an `iptables` rule to redirect cloud-init
-requests to it. e.g. if `fakecloud` is running on localhost:3000:
+Run it on your VM host(s), and add an `iptables` rule to redirect
+cloud-init requests to it. e.g. if `fakecloud` is running on
+localhost:3000:
 
    `iptables -t nat -I PREROUTING -d 169.254.169.254 -p tcp --dport 80 -j REDIRECT --to-port 3000`
 
@@ -23,8 +24,9 @@ requests to it. e.g. if `fakecloud` is running on localhost:3000:
   * user-data common to all: `./userdata/all/*`
   * host-specific user-data: `./userdata/vmname/*`
   * default user-data for hosts without host-specific user-data: `./userdata/default/*`
-  * optional separate files for userdata, ssh host keys, ssh auth keys, and
-    shellscripts e.g. `./userdata/all/shellscript` or `./userdata/vmname/hostkeys`.
+  * optional separate files for generic userdata, ssh host keys, ssh
+    auth keys, and shellscripts e.g. `./userdata/all/shellscript` or
+    `./userdata/vmname/hostkeys`.
 
 **Testing features:**
 
@@ -34,7 +36,8 @@ requests to it. e.g. if `fakecloud` is running on localhost:3000:
 
 **Future plans:**
 
-* get the data from an SQL database, using DBI to allow for Postgresql, SQLite, MySQL etc
+* get the metadata and user-data files from an SQL database, using DBI
+to allow for Postgresql, SQLite, MySQL etc
 * a web front end for editing VM host data
  
-**Written with perl and Mojolicious**
+**Written with perl and Mojolicious::Lite**
