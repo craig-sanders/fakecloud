@@ -40,7 +40,7 @@ helper fmt => sub {
   my $c = shift;
   # browsable links in a browser, text/plain for cloud-init and command-line testing.
   my $fmt = 'html';
-  $fmt = 'txt' if ($c->req->headers->user_agent =~ /Cloud-Init|Mojolicious/);
+  $fmt = 'txt' if ($c->req->headers->user_agent =~ /Cloud-Init|Mojolicious|curl|wget|libwww-perl/);
   return $fmt;
 };
 
@@ -124,8 +124,8 @@ get '/user-data' => sub {
       $top->attach(Path => "$udpath/all/$udfile" , Type => $filetypes{$udfile}, Filename => "$udfile-all");
     };
 
-    # then they get either $udpath/$host/$udfile if it exists,
-    # otherwise $udpath/default/$udfile if that exists
+    # then they get $udpath/$host/$udfile if it exists, otherwise they
+    # get $udpath/default/$udfile (if that exists).
     my $hostudfile='';
     $hostudfile="$udpath/default/$udfile" if (-e "$udpath/default/$udfile");
     $hostudfile="$udpath/$host/$udfile" if (-e "$udpath/$host/$udfile");
