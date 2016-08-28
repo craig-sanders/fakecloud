@@ -6,6 +6,8 @@ use MIME::Entity;
 
 use IO::Compress::Gzip qw(gzip $GzipError) ;
 
+# Configuration
+my $domain = 'taz.net.au';   # domain name appended to each VM's hostname
 app->secrets(['changeme']);
 
 hook after_render => sub {
@@ -160,11 +162,11 @@ get '/reservation-id'    => { format => 'txt', text => 'r-fake' };
 get '/security-groups'   => { format => 'txt', text => 'none' };
 get '/instance-type'     => { format => 'txt', text => 't2.medium' };
 get '/instance-id'       => sub { my $c=shift ; $c->render(format => 'txt', text => $c->instance_id) };
-get '/hostname'          => sub { my $c=shift ; $c->render(format => 'txt', text => $c->hostname . '.taz.net.au') };
-get '/public-hostname'   => sub { my $c=shift ; $c->render(format => 'txt', text => $c->hostname . '.taz.net.au') };
+get '/hostname'          => sub { my $c=shift ; $c->render(format => 'txt', text => $c->hostname . '.' . $domain) };
+get '/public-hostname'   => sub { my $c=shift ; $c->render(format => 'txt', text => $c->hostname . '.' . $domain) };
 get '/public-ipv4'       => sub { my $c=shift ; $c->render(format => 'txt', text => $c->ip) };
 get '/local-ipv4'        => sub { my $c=shift ; $c->render(format => 'txt', text => $c->ip) };
-get '/local-hostname'    => sub { my $c=shift ; $c->render(format => 'txt', text => $c->hostname . '.taz.net.au') };
+get '/local-hostname'    => sub { my $c=shift ; $c->render(format => 'txt', text => $c->hostname . '.' . $domain) };
 get '/mac'               => sub { my $c=shift ; $c->render(format => 'txt', text => $c->mac) };
 
 app->start;
