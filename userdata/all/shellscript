@@ -1,0 +1,4 @@
+#! /bin/sh
+# this is run on all VMs
+
+echo "The time is now $(date -R)"

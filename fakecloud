@@ -1,0 +1,223 @@
+#!/usr/bin/perl
+# vim: ts=2:sw=2:et:syntax=perl
+
+use Mojolicious::Lite;
+use MIME::Entity;
+
+use IO::Compress::Gzip qw(gzip $GzipError) ;
+
+app->secrets(['changeme']);
+
+hook after_render => sub {
+  my ($c, $output, $format) = @_;
+ 
+  # Check if "gzip => 1" has been set in the stash
+  return unless $c->stash->{gzip};
+ 
+  # Check if user agent accepts gzip compression
+  return unless ($c->req->headers->accept_encoding // '') =~ /gzip/i;
+
+  # set headers
+  $c->res->headers->append(Vary => 'Accept-Encoding');
+  $c->res->headers->content_encoding('gzip');
+ 
+  # Compress content with gzip
+  gzip $output, \my $compressed;
+  $$output = $compressed;
+};
+
+my %dhcp;
+parse_dhcp(\%dhcp);
+
+helper ip => sub {
+  my $c = shift;
+  return $c->tx->remote_address;
+};
+
+helper fmt => sub {
+  my $c = shift;
+  # browsable links in a browser, text/plain for cloud-init and command-line testing.
+  my $fmt = 'html';
+  $fmt = 'txt' if ($c->req->headers->user_agent =~ /Cloud-Init|Mojolicious/);
+  return $fmt;
+};
+
+helper hostname => sub {
+  my $c = shift;
+
+  # allow ?host= to override (for testing)
+  my $host = $c->param('host') || $dhcp{$c->tx->remote_address}->{'host'};
+  #my $host = $dhcp{$c->tx->remote_address}->{'host'};
+
+  return $host;
+};
+
+helper mac => sub {
+  my $c = shift;
+  return $dhcp{$c->tx->remote_address}->{'mac'};
+};
+
+helper instance_id => sub {
+  my $c = shift;
+
+  # re-use the same time for a while - cloud-init fetches instance-id
+  # repeatedly during boot.  10 seconds should be plenty.
+  my ($now);
+  our ($instance_time);
+  $now = int(time);
+  $instance_time = $now if ((!defined($instance_time)) || ($now - 10 gt $instance_time));
+
+  return 'i-' . $c->hostname . '-' . $instance_time;
+};
+
+get '/' => sub {
+  my $c = shift;
+
+  $c->stash(links => [ qw(1.0/ 2009-04-04/ latest/) ] );
+  $c->render(template => 'print_links', format => $c->fmt);
+};
+
+get '/app' => sub {
+  my $c = shift;
+
+  use Data::Dumper;
+  $Data::Dumper::Terse = 1;
+  #  $c->render(text => Dumper(\%dhcp), format => 'txt');
+  #$c->render(text => Dumper(\app), format => 'txt');
+  $c->render(text => Dumper($c), format => 'txt');
+};
+
+# TODO: /#version is way too broad.
+#       should only support /1.0, /2009-04-04, and /latest
+get '/#version' => sub {
+  my $c = shift;
+  $c->stash(links => [ qw(meta-data/ user-data/) ] );
+  $c->render(template => 'print_links', format => $c->fmt);
+};
+
+under '/#version';
+
+get '/user-data' => sub {
+  my $c = shift;
+
+  my $top = MIME::Entity->build(Type => 'multipart/mixed');
+  my $udpath = './userdata';
+
+  my $host = $c->hostname;
+
+  my %filetypes;
+  if (! %filetypes) {
+    %filetypes = ('hostkeys'    => 'text/cloud-config',
+                  'authkeys'    => 'text/cloud-config',
+                  'userdata'    => 'text/cloud-config',
+                  'shellscript' => 'text/x-shellscript',
+                 );
+  };
+
+  # cloud-init merges multiple attachments of the same type. documented at
+  # http://cloudinit.readthedocs.io/en/latest/topics/merging.html
+  foreach my $udfile (sort keys %filetypes) {
+    # all hosts get the files in the $udpath/all directory
+    if (-e "$udpath/all/$udfile") {
+      $top->attach(Path => "$udpath/all/$udfile" , Type => $filetypes{$udfile}, Filename => "$udfile-all");
+    };
+
+    # then they get either $udpath/$host/$udfile if it exists,
+    # otherwise $udpath/default/$udfile if that exists
+    my $hostudfile='';
+    $hostudfile="$udpath/default/$udfile" if (-e "$udpath/default/$udfile");
+    $hostudfile="$udpath/$host/$udfile" if (-e "$udpath/$host/$udfile");
+
+    if (-e $hostudfile) {
+      $top->attach(Path => $hostudfile, Type => $filetypes{$udfile}, Filename => "$udfile-$host");
+    };
+  };
+
+  $c->render(text => $top->as_string, format => 'txt', gzip => 1);
+};
+
+get '/meta-data' => sub {
+  my $c = shift;
+
+  $c->stash(links => [ sort qw(
+        ami-id ami-launch-index ami-manifest-path hostname instance-id
+        instance-type local-hostname local-ipv4 public-hostname
+        public-ipv4 reservation-id security-groups
+  ) ]);
+
+        # block-device-mapping/ public-keys/ placement/
+
+  $c->render(template => 'print_links', format => $c->fmt);
+};
+
+# meta-data
+under '/#version/meta-data';
+
+get '/ami-id'            => { format => 'txt', text => 'ami-fake' };
+get '/ami-launch-index'  => { format => 'txt', text => '0' };
+get '/ami-manifest-path' => { format => 'txt', text => 'unknown' };
+get '/reservation-id'    => { format => 'txt', text => 'r-fake' };
+get '/security-groups'   => { format => 'txt', text => 'none' };
+get '/instance-type'     => { format => 'txt', text => 't2.medium' };
+get '/instance-id'       => sub { my $c=shift ; $c->render(format => 'txt', text => $c->instance_id) };
+get '/hostname'          => sub { my $c=shift ; $c->render(format => 'txt', text => $c->hostname . '.taz.net.au') };
+get '/public-hostname'   => sub { my $c=shift ; $c->render(format => 'txt', text => $c->hostname . '.taz.net.au') };
+get '/public-ipv4'       => sub { my $c=shift ; $c->render(format => 'txt', text => $c->ip) };
+get '/local-ipv4'        => sub { my $c=shift ; $c->render(format => 'txt', text => $c->ip) };
+get '/local-hostname'    => sub { my $c=shift ; $c->render(format => 'txt', text => $c->hostname . '.taz.net.au') };
+get '/mac'               => sub { my $c=shift ; $c->render(format => 'txt', text => $c->mac) };
+
+app->start;
+
+###
+### subroutines
+###
+
+sub parse_dhcp {
+  my $dhcp = $_;
+
+  #my $filename = '/etc/dhcp/fixed.txt';
+  my $filename = './hosts.txt';
+  our $last_parsed = 0 if (!defined $last_parsed);
+
+  my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,$ctime,$blksize,$blocks) = stat($filename);
+
+  # do nothing if file hasn't changed
+  return if ($last_parsed ge $mtime);
+
+  $last_parsed = $mtime;
+  $dhcp = ();
+
+  # localhost entries for testing in a browser or from command-line
+  $dhcp{'127.0.0.1'}->{'host'} = 'localhost';
+  $dhcp{'127.0.0.1'}->{'mac'}  = '01:02:03:04:05:06';
+  
+  open(DHCP,'<',$filename) || die "couldn't open $filename: $!\n";
+  while(<DHCP>) {
+    s/^\s*|\s*$|#.*//g;
+    next if (/^$/);
+  
+    my ($host,$mac,$ip) = split ;
+
+    $dhcp{$ip}->{'host'} = $host;
+    $dhcp{$ip}->{'mac'} = $mac;
+  };
+  close(DHCP);
+};
+
+__DATA__
+
+@@ print_links.txt.ep
+% my $output='';
+% foreach my $link (@$links) {
+%   $output .= "$link\n"
+% };
+% return $output;
+
+@@ print_links.html.ep
+% my $output='';
+% foreach my $link (@$links) {
+%   $output .= "<a href=\"$link\">$link</a><br />\n"
+% };
+% return $output;
+

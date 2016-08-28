@@ -1,0 +1,8 @@
+#!/bin/sh
+
+echo "This is only run on VM's without their own script"
+
+apt-get update
+apt-get -V -d -u -y --allow-unauthenticated dist-upgrade
+apt-get -u -y --allow-unauthenticated dist-upgrade
+
