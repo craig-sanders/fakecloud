@@ -45,9 +45,9 @@ helper fmt => sub {
 helper hostname => sub {
   my $c = shift;
 
+  my $host = $dhcp{$c->tx->remote_address}->{'host'};
   # allow ?host= to override (for testing)
-  my $host = $c->param('host') || $dhcp{$c->tx->remote_address}->{'host'};
-  #my $host = $dhcp{$c->tx->remote_address}->{'host'};
+  $host = $c->param('host') if defined($c->param('host'));
 
   return $host;
 };
