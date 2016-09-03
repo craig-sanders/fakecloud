@@ -16,16 +16,11 @@ my $debug = app->mode eq 'development';
 my %dhcp;
 parse_dhcp(\%dhcp);
 
-helper ip => sub {
-  my $c = shift;
-  return $c->tx->remote_address;
-};
-
 get '/' => sub {
   my $c = shift;
 
   $c->stash(links => [ qw(1.0/ 2009-04-04/ latest/) ] );
-  $c->render(template => 'print_links', format => $c->fmt);
+  $c->render(template => 'print_links', format => $c->fc_fmt);
 };
 
 if ($debug) {
@@ -43,7 +38,7 @@ if ($debug) {
       $c->render(text => pp(\$c), format => 'txt');
     } else {
       $c->stash(links => [ qw(dhcp app c) ] );
-      $c->render(template => 'print_links', format => $c->fmt);
+      $c->render(template => 'print_links', format => $c->fc_fmt);
     };
   };
 };
@@ -57,7 +52,7 @@ group {
   get '/' => sub {
     my $c = shift;
     $c->stash(links => [ qw(meta-data/ user-data/) ] );
-    $c->render(template => 'print_links', format => $c->fmt);
+    $c->render(template => 'print_links', format => $c->fc_fmt);
   };
 
   get '/user-data' => sub {
@@ -66,7 +61,7 @@ group {
     my $top = MIME::Entity->build(Type => 'multipart/mixed');
     my $udpath = './userdata';
 
-    my $host = $c->hostname;
+    my $host = $c->fc_hostname;
 
     my %filetypes;
     if (! %filetypes) {
@@ -94,26 +89,25 @@ group {
                      Type => $filetypes{$udfile},
                      Filename => "$udfile-all");
 
-        $c->app->log->debug("attaching $udpath/all/$udfile") if ($debug);
+        $c->app->log->debug("attaching $udpath/all/$udfile");
       };
 
       # then they get $udpath/$host/$udfile if it exists, otherwise they
       # get $udpath/default/$udfile (if that exists).
       my $hostudfile='';
       my $hostudpath='';
-      $hostudpath="$udpath/default" if (-e "$udpath/default/$udfile");
-      $hostudpath="$udpath/$host"   if (-e "$udpath/$host/$udfile");
+      $hostudpath='default' if (-e "$udpath/default/$udfile");
+      $hostudpath="$host"   if (-e "$udpath/$host/$udfile");
 
-      $hostudfile = "$hostudpath/$udfile" if ($hostudpath ne '');
+      next unless ($hostudpath);
 
-      if (-e $hostudfile) {
-        $top->attach(Path => $hostudfile,
-                     Type => $filetypes{$udfile},
-                     Filename => "$udfile-$hostudpath");
+      $hostudfile = "$udpath/$hostudpath/$udfile";
 
-        $c->app->log->debug("attaching $hostudfile") if ($debug);
-      };
+      $top->attach(Path => $hostudfile,
+                   Type => $filetypes{$udfile},
+                   Filename => "$udfile-$hostudpath");
 
+      $c->app->log->debug("attaching $hostudfile");
     };
 
     $c->render(text => $top->as_string, format => 'txt', gzip => 1);
@@ -137,7 +131,7 @@ group {
                    #  block-device-mapping/ public-keys/ placement/
               ]);
 
-      $c->render(template => 'print_links', format => $c->fmt);
+      $c->render(template => 'print_links', format => $c->fc_fmt);
 
     } else {
 
@@ -149,15 +143,15 @@ group {
       elsif ($r eq 'reservation-id')    { $txt = 'r-fake' }
       elsif ($r eq 'security-groups')   { $txt = 'none' }
       elsif ($r eq 'instance-type')     { $txt = 't2.medium' }
-      elsif ($r eq 'instance-id')       { $txt = $c->instance_id }
-      elsif ($r eq 'hostname')          { $txt = $c->fqdn }
-      elsif ($r eq 'public-hostname')   { $txt = $c->fqdn }
-      elsif ($r eq 'public-ipv4')       { $txt = $c->ip }
-      elsif ($r eq 'local-ipv4')        { $txt = $c->ip }
-      elsif ($r eq 'local-hostname')    { $txt = $c->fqdn }
-      elsif ($r eq 'mac')               { $txt = $c->mac }
+      elsif ($r eq 'instance-id')       { $txt = $c->fc_instance_id }
+      elsif ($r eq 'hostname')          { $txt = $c->fc_fqdn }
+      elsif ($r eq 'public-hostname')   { $txt = $c->fc_fqdn }
+      elsif ($r eq 'public-ipv4')       { $txt = $c->fc_ip }
+      elsif ($r eq 'local-ipv4')        { $txt = $c->fc_ip }
+      elsif ($r eq 'local-hostname')    { $txt = $c->fc_fqdn }
+      elsif ($r eq 'mac')               { $txt = $c->fc_mac }
       else {
-        $c->app->log->debug("request for unknown metadata: '$r'");
+        $c->app->log->debug("Request for unknown meta-data: '$r'");
         $c->render(format => 'txt', text => '', status => 404);
         return;
       }
@@ -194,7 +188,7 @@ hook after_render => sub {
 ### helpers
 ###
 
-helper fmt => sub {
+helper fc_fmt => sub {
   my $c = shift;
   # browsable links in a browser, text/plain for cloud-init and command-line
   # testing.
@@ -204,7 +198,7 @@ helper fmt => sub {
   return $fmt;
 };
 
-helper hostname => sub {
+helper fc_hostname => sub {
   my $c = shift;
 
   my $host = $dhcp{$c->tx->remote_address}->{'host'};
@@ -214,17 +208,22 @@ helper hostname => sub {
   return $host;
 };
 
-helper fqdn => sub {
+helper fc_fqdn => sub {
   my $c = shift;
-  return $c->hostname . '.' . $domain;
+  return $c->fc_hostname . '.' . $domain;
 };
 
-helper mac => sub {
+helper fc_ip => sub {
+  my $c = shift;
+  return $c->tx->remote_address;
+};
+
+helper fc_mac => sub {
   my $c = shift;
   return $dhcp{$c->tx->remote_address}->{'mac'};
 };
 
-helper instance_id => sub {
+helper fc_instance_id => sub {
   my $c = shift;
 
   # re-use the same time for a while - cloud-init fetches instance-id
@@ -236,7 +235,7 @@ helper instance_id => sub {
     $instance_time = $now;
   };
 
-  return 'i-' . $c->hostname . '-' . $instance_time;
+  return 'i-' . $c->fc_hostname . '-' . $instance_time;
 };
 
 ###
