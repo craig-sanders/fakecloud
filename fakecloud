@@ -7,8 +7,12 @@ use MIME::Entity;
 use IO::Compress::Gzip qw(gzip $GzipError) ;
 
 # Configuration
+# TODO: read from separate config file
 my $domain = 'taz.net.au';   # domain name appended to each VM's hostname
 app->secrets(['changeme']);
+# End of config
+
+my $debug = app->mode eq 'development';
 
 hook after_render => sub {
   my ($c, $output, $format) = @_;
@@ -79,14 +83,24 @@ get '/' => sub {
   $c->render(template => 'print_links', format => $c->fmt);
 };
 
-get '/app' => sub {
-  my $c = shift;
+if ($debug) {
+  get '/dump*dump' => sub {
+    my $c = shift;
+    my $dump = $c->stash('dump');
 
-  use Data::Dumper;
-  $Data::Dumper::Terse = 1;
-  #  $c->render(text => Dumper(\%dhcp), format => 'txt');
-  #$c->render(text => Dumper(\app), format => 'txt');
-  $c->render(text => Dumper($c), format => 'txt');
+    use Data::Dump qw(pp);
+
+    if ($dump eq '/dhcp') {
+      $c->render(text => pp(\%dhcp), format => 'txt');
+    } elsif ($dump eq '/app') {
+      $c->render(text => pp(app), format => 'txt');
+    } elsif ($dump eq '/c') {
+      $c->render(text => pp(\$c), format => 'txt');
+    } else {
+      $c->stash(links => [ qw(dhcp app c) ] );
+      $c->render(template => 'print_links', format => $c->fmt);
+    };
+  };
 };
 
 # TODO: /#version is way too broad.
