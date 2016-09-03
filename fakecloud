@@ -2,9 +2,8 @@
 # vim: ts=2:sw=2:et:syntax=perl
 
 use Mojolicious::Lite;
-use MIME::Entity;
-
 use IO::Compress::Gzip qw(gzip $GzipError) ;
+use MIME::Entity;
 
 # Configuration
 # TODO: read from separate config file
@@ -14,75 +13,12 @@ app->secrets(['changeme']);
 
 my $debug = app->mode eq 'development';
 
-hook after_render => sub {
-  my ($c, $output, $format) = @_;
- 
-  # Check if "gzip => 1" has been set in the stash
-  return unless $c->stash->{gzip};
- 
-  # Check if user agent accepts gzip compression
-  return unless ($c->req->headers->accept_encoding // '') =~ /gzip/i;
-
-  # set headers
-  $c->res->headers->append(Vary => 'Accept-Encoding');
-  $c->res->headers->content_encoding('gzip');
- 
-  # Compress content with gzip
-  gzip $output, \my $compressed;
-  $$output = $compressed;
-};
-
 my %dhcp;
 parse_dhcp(\%dhcp);
 
 helper ip => sub {
   my $c = shift;
   return $c->tx->remote_address;
-};
-
-helper fmt => sub {
-  my $c = shift;
-  # browsable links in a browser, text/plain for cloud-init and command-line
-  # testing.
-  my $fmt = 'html';
-  my $text_agents = qr/Cloud-Init|Mojolicious|curl|wget|libwww-perl/; 
-  $fmt = 'txt' if ($c->req->headers->user_agent =~ $text_agents);
-  return $fmt;
-};
-
-helper hostname => sub {
-  my $c = shift;
-
-  my $host = $dhcp{$c->tx->remote_address}->{'host'};
-  # allow ?host= to override (for testing)
-  $host = $c->param('host') if defined($c->param('host'));
-
-  return $host;
-};
-
-helper fqdn => sub {
-  my $c = shift;
-  return $c->hostname . '.' . $domain;
-};
-
-helper mac => sub {
-  my $c = shift;
-  return $dhcp{$c->tx->remote_address}->{'mac'};
-};
-
-helper instance_id => sub {
-  my $c = shift;
-
-  # re-use the same time for a while - cloud-init fetches instance-id
-  # repeatedly during boot.  10 seconds should be plenty.
-  my ($now);
-  our ($instance_time);
-  $now = int(time);
-  if ((!defined($instance_time)) || ($now - 10 >= $instance_time)) {
-    $instance_time = $now;
-  };
-
-  return 'i-' . $c->hostname . '-' . $instance_time;
 };
 
 get '/' => sub {
@@ -111,7 +47,6 @@ if ($debug) {
     };
   };
 };
-
 
 group {
   get '/1.0'    => sub { my $c=shift ; $c->redirect_to('/2009-04-04/') };
@@ -225,8 +160,76 @@ group {
   };
 };
 
+###
+### hooks
+###
 
-app->start;
+hook after_render => sub {
+  my ($c, $output, $format) = @_;
+ 
+  # Check if "gzip => 1" has been set in the stash
+  return unless $c->stash->{gzip};
+ 
+  # Check if user agent accepts gzip compression
+  return unless ($c->req->headers->accept_encoding // '') =~ /gzip/i;
+
+  # set headers
+  $c->res->headers->append(Vary => 'Accept-Encoding');
+  $c->res->headers->content_encoding('gzip');
+ 
+  # Compress content with gzip
+  gzip $output, \my $compressed;
+  $$output = $compressed;
+};
+
+###
+### helpers
+###
+
+helper fmt => sub {
+  my $c = shift;
+  # browsable links in a browser, text/plain for cloud-init and command-line
+  # testing.
+  my $fmt = 'html';
+  my $text_agents = qr/Cloud-Init|Mojolicious|curl|wget|libwww-perl/; 
+  $fmt = 'txt' if ($c->req->headers->user_agent =~ $text_agents);
+  return $fmt;
+};
+
+helper hostname => sub {
+  my $c = shift;
+
+  my $host = $dhcp{$c->tx->remote_address}->{'host'};
+  # allow ?host= to override (for testing)
+  $host = $c->param('host') if defined($c->param('host'));
+
+  return $host;
+};
+
+helper fqdn => sub {
+  my $c = shift;
+  return $c->hostname . '.' . $domain;
+};
+
+helper mac => sub {
+  my $c = shift;
+  return $dhcp{$c->tx->remote_address}->{'mac'};
+};
+
+helper instance_id => sub {
+  my $c = shift;
+
+  # re-use the same time for a while - cloud-init fetches instance-id
+  # repeatedly during boot.  10 seconds should be plenty.
+  my ($now);
+  our ($instance_time);
+  $now = int(time);
+  if ((!defined($instance_time)) || ($now - 10 >= $instance_time)) {
+    $instance_time = $now;
+  };
+
+  return 'i-' . $c->hostname . '-' . $instance_time;
+};
 
 ###
 ### subroutines
@@ -264,6 +267,8 @@ sub parse_dhcp {
   };
   close(DHCP);
 };
+
+app->start;
 
 __DATA__
 
