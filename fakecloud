@@ -44,9 +44,6 @@ if ($debug) {
 };
 
 group {
-  get '/1.0'    => sub { my $c=shift ; $c->redirect_to('/2009-04-04/') };
-  get '/latest' => sub { my $c=shift ; $c->redirect_to('/2009-04-04/') };
-
   under '/2009-04-04';
 
   get '/' => sub {
@@ -165,6 +162,23 @@ group {
 ###
 ### hooks
 ###
+
+hook before_dispatch => sub {
+  my $c = shift;
+
+  my $path = $c->req->url->path;
+
+  # add trailing / to "directory" URLs without them.
+  if ($path =~ m=/(1.0|latest|2009-04-04)(/meta-data)?$=) {
+    $c->redirect_to($path . '/');
+  };
+
+  # rewrite /1.0 and /latest requests to /2009-04-04
+  if ($path =~ m=^/(latest|1.0)=) {
+    $path =~ s=^/(latest|1.0)=/2009-04-04=;
+    $c->req->url->path($path);
+  };
+};
 
 hook after_render => sub {
   my ($c, $output, $format) = @_;
