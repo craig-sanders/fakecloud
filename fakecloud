@@ -94,6 +94,7 @@ group {
                      Type => $filetypes{$udfile},
                      Filename => "$udfile-all");
 
+        $c->app->log->debug("attaching $udpath/all/$udfile") if ($debug);
       };
 
       # then they get $udpath/$host/$udfile if it exists, otherwise they
@@ -103,12 +104,14 @@ group {
       $hostudpath="$udpath/default" if (-e "$udpath/default/$udfile");
       $hostudpath="$udpath/$host"   if (-e "$udpath/$host/$udfile");
 
-      $hostudfile = "$udpath/$hostudpath/$udfile" if ($hostudpath ne '');
+      $hostudfile = "$hostudpath/$udfile" if ($hostudpath ne '');
 
       if (-e $hostudfile) {
         $top->attach(Path => $hostudfile,
                      Type => $filetypes{$udfile},
                      Filename => "$udfile-$hostudpath");
+
+        $c->app->log->debug("attaching $hostudfile") if ($debug);
       };
 
     };
