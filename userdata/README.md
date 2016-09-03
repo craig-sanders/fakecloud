@@ -12,3 +12,10 @@ Filenames supported in all of the above subdirectories are:
 * `authkeys   ` - ssh auth keys that are added to root and the first user (text/cloud-config)
 * `shellscript` - text/x-shellscript
   
+Filenames supported in vmname/ subdirectories:
+
+* `exclude-all            ` - exclude all files from all/ subdirectory
+* `exclude-all-userdata   ` - exclude all/userdata for this host
+* `exclude-all-hostkeys   ` - exclude all/hostkeys for this host
+* `exclude-all-authkeys   ` - exclude all/authkeys for this host
+* `exclude-all-shellscript` - exclude all/shellscript for this host
