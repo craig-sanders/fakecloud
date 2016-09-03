@@ -42,9 +42,11 @@ helper ip => sub {
 
 helper fmt => sub {
   my $c = shift;
-  # browsable links in a browser, text/plain for cloud-init and command-line testing.
+  # browsable links in a browser, text/plain for cloud-init and command-line
+  # testing.
   my $fmt = 'html';
-  $fmt = 'txt' if ($c->req->headers->user_agent =~ /Cloud-Init|Mojolicious|curl|wget|libwww-perl/);
+  my $text_agents = qr/Cloud-Init|Mojolicious|curl|wget|libwww-perl/; 
+  $fmt = 'txt' if ($c->req->headers->user_agent =~ $text_agents);
   return $fmt;
 };
 
@@ -76,7 +78,9 @@ helper instance_id => sub {
   my ($now);
   our ($instance_time);
   $now = int(time);
-  $instance_time = $now if ((!defined($instance_time)) || ($now - 10 gt $instance_time));
+  if ((!defined($instance_time)) || ($now - 10 >= $instance_time)) {
+    $instance_time = $now;
+  };
 
   return 'i-' . $c->hostname . '-' . $instance_time;
 };
