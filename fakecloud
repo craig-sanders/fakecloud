@@ -5,6 +5,11 @@ use Mojolicious::Lite;
 use IO::Compress::Gzip qw(gzip $GzipError) ;
 use MIME::Entity;
 
+# enable access logging if Mojolicious::Plugin::AccessLog is available.
+if ( eval { require Mojolicious::Plugin::AccessLog } ) {
+  plugin AccessLog => {log => './log/access.log', format => 'combined'};
+};
+
 # Configuration
 # TODO: read from separate config file
 my $domain = 'taz.net.au';   # domain name appended to each VM's hostname
@@ -167,6 +172,7 @@ hook before_dispatch => sub {
   my $c = shift;
 
   my $path = $c->req->url->path;
+  $c->app->log->debug("Request from " . $c->tx->remote_address);
 
   # add trailing / to "directory" URLs without them.
   if ($path =~ m=/(1.0|latest|2009-04-04)(/meta-data)?$=) {
